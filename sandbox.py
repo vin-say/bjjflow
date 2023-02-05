@@ -5,7 +5,6 @@ import graphviz
 import os
 from graphviz import Digraph
 
-
 os.environ["PATH"] += os.pathsep + 'C:\Program Files\Graphviz\bin'
 
 #%%
@@ -16,7 +15,7 @@ states = pd.read_excel('bjj_flow_vps.xlsx',sheet_name='States')['States'].to_lis
 
 
 font = 'helvetica'
-gph = Digraph('G', filename='bjj_flow_vps.gv')
+gph = Digraph('G', filename='bjj_flow_vps.gv', strict=True)
 
 # NOTE: the subgraph name needs to begin with 'cluster' (all lowercase)
 #       so that Graphviz recognizes it as a special cluster subgraph
@@ -39,9 +38,20 @@ shape_sub = 'diamond'
 
 
 
-for _, row in df.iterrows():
-    if isinstance(row['Position'],str) & isinstance(row['Result'],str) & isinstance(row['Move'],str):
+for _, row in df.iloc[:].iterrows():
+
+    # allow for opponent moves
+    # if isinstance(row['Position'],str) & isinstance(row['Result'],str) & ~isinstance(row['Move'],str):
+    #     row['Move'] = ''
+
+    if isinstance(row['Position'],str) & isinstance(row['Result'],str):
         
+        # if ~isinstance(row['Dilemma'],str):
+        #     row['Dilemma'] = ''
+        reaction_only = False
+        if not isinstance(row['Move'],str):
+            reaction_only = True
+
         if row['Position'] in states:
             gph.attr('node', shape=shape_state, color=color_state, style='filled', fontname=font)
             gph.node(row['Position'])
@@ -76,41 +86,56 @@ for _, row in df.iterrows():
             
             g.attr('node', shape=shape_move, color=color_move, style='filled')
 
-            if row['Move'] in techniques:
-                tech_idx = df_tech[df_tech['Technique']==row['Move']].index.item()
-                tech_name = df_tech.iloc[tech_idx]['Technique']
-                with g.subgraph(name='cluster'+tech_name) as t:
-                    # exclude tech name and drop NaNs 
-                    steps = [x for x in df_tech.iloc[tech_idx].to_list()[1:] if isinstance(x,str)] 
-                    for ii in range(len(steps)-1):
-                        t.edge(steps[ii],steps[ii+1])
-                        print(steps[ii])
-                    
-                    t.attr(label=tech_name, fontname=font)
-                #permanently replace row value with cluster name
-                move_alias = 'cluster'+tech_name# alias of move cell 
-                # g.node(row['Dilemma']+row['Move'], label=row['Move'])
+            if not reaction_only:
+                if row['Move'] in techniques:
+                    tech_idx = df_tech[df_tech['Technique']==row['Move']].index.item()
+                    tech_name = df_tech.iloc[tech_idx]['Technique']
+                    with g.subgraph(name='cluster'+tech_name) as t:
+                        # exclude tech name and drop NaNs 
+                        steps = [x for x in df_tech.iloc[tech_idx].to_list()[1:] if isinstance(x,str)] 
+                        for ii in range(len(steps)-1):
+                            # if ii == 0:
+                            #     g.edge(
+                            t.edge(steps[ii],steps[ii+1])
+                            print(steps[ii])
+                        
+                        t.attr(label=tech_name, fontname=font)
+                    #permanently replace row value with cluster name
+                    move_alias = 'cluster'+tech_name# alias of move cell 
+                    # g.node(row['Dilemma']+row['Move'], label=row['Move'])
 
-            else:
-                move_alias = row['Dilemma']+row['Move'] # alias of move cell
+                else:
+                    move_alias = row['Dilemma']+row['Move'] # alias of move cell
             
-            g.node(move_alias, label=row['Move'])
-            
-            gph.attr('node', shape=shape_move, color=color_move, style='filled', fontname=font)
-            gph.edge(position_alias, move_alias)
+
+            # if row['Move'] == '':
+            #     move_alias = position_alias
+
+                g.node(move_alias, label=row['Move'])
+                
+                gph.attr('node', shape=shape_move, color=color_move, style='filled', fontname=font)
+                gph.edge(position_alias, move_alias)
 
             if row['Result'] in states:
                 gph.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 gph.node(result_alias, label=row['Result'])
-                gph.edge(move_alias, result_alias)
+                if not reaction_only:
+                    gph.edge(move_alias, result_alias)
+                else:
+                    gph.edge(position_alias, result_alias)
+                    
             else:
                 g.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 g.node(result_alias, label=row['Result'])
-                g.edge(move_alias, result_alias)
-
+                if not reaction_only:
+                    g.edge(move_alias, result_alias)
+                else:
+                    g.edge(position_alias, result_alias)
             # gph.edges([(position_alias, move_alias),
             #          (move_alias, row['Dilemma']+row['Result'])])
 
+            # if reaction_only:
+            #     gph.edge(position_alias, result_alias)
 
             g.attr(label=row['Dilemma'], fontname=font)
         # g.attr('node', shape='ellipse', color='coral', style='filled', fontname='helvetica')
