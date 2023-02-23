@@ -5,6 +5,7 @@ import graphviz
 import os
 from graphviz import Digraph
 
+# necessary otherwise pkg can't connect with Graphviz software
 os.environ["PATH"] += os.pathsep + 'C:\Program Files\Graphviz\bin'
 
 #%%
@@ -13,12 +14,12 @@ df_tech = pd.read_excel('bjj_flow_vps.xlsx',sheet_name='Techniques')
 df_subs = pd.read_excel('bjj_flow_vps.xlsx',sheet_name='Submissions')
 states = pd.read_excel('bjj_flow_vps.xlsx',sheet_name='States')['States'].to_list()
 
+# drop rows with special characters indicating headings
+df = df[~(df['Position'].str.contains('--') & 
+          ~df['Position'].isna())].reset_index(drop=True)
 
 font = 'helvetica'
 gph = Digraph('G', filename='bjj_flow_vps.gv', strict=True)
-
-# NOTE: the subgraph name needs to begin with 'cluster' (all lowercase)
-#       so that Graphviz recognizes it as a special cluster subgraph
 
 # 1/29 turn off techniques list
 # techniques = df_tech['Technique'].to_list()
@@ -36,29 +37,24 @@ shape_counter = 'ellipse'
 shape_move = 'box'
 shape_sub = 'diamond'
 
-
-
 for _, row in df.iloc[:].iterrows():
 
-    # allow for opponent moves
-    # if isinstance(row['Position'],str) & isinstance(row['Result'],str) & ~isinstance(row['Move'],str):
-    #     row['Move'] = ''
-
+    # Check if row has minimum required columns filled
     if isinstance(row['Position'],str) & isinstance(row['Result'],str):
         
-        # if ~isinstance(row['Dilemma'],str):
-        #     row['Dilemma'] = ''
+        # reaction_only indicates opponent is proactively making move against you
         reaction_only = False
         if not isinstance(row['Move'],str):
             reaction_only = True
 
+        # 'state' indicates a fundamental position, and thus should be excluded from dilemma subsets
         if row['Position'] in states:
             gph.attr('node', shape=shape_state, color=color_state, style='filled', fontname=font)
             gph.node(row['Position'])
             position_alias = row['Position']
         else:
-            position_alias = row['Dilemma']+row['Position']
-
+            # dilemma is appended to alias for edge cases where move is named the same across dilemmas/positions
+            position_alias = row['Dilemma']+row['Position'] 
 
         if row['Result'] in states:
             gph.attr('node', shape=shape_state, color=color_state, style='filled', fontname=font)
@@ -67,7 +63,7 @@ for _, row in df.iloc[:].iterrows():
         else:
             result_alias = row['Dilemma']+row['Result']
 
-
+        # submissions are distinguished so they'll have different appearance
         if row['Result'] in subs:
             shape_result = shape_sub
             color_result = color_sub
@@ -75,18 +71,12 @@ for _, row in df.iloc[:].iterrows():
             shape_result = shape_counter
             color_result = color_counter
 
+        # NOTE: the subgraph name needs to begin with 'cluster' (all lowercase)
+        #       so that Graphviz recognizes it as a special cluster subgraph
         with gph.subgraph(name='cluster'+row['Dilemma']) as g:
 
-            g.attr('node', shape='ellipse', color='coral', style='filled', fontname=font)
-            # g.node(row['Dilemma']+row['Position'], label=row['Position'])
-            
-
-
-            # g.node(row['Dilemma']+row['Result'], label=row['Result'])
-            
-            g.attr('node', shape=shape_move, color=color_move, style='filled')
-
             if not reaction_only:
+                # 1/29 techniques feature isn't operable, techniques list set to empty
                 if row['Move'] in techniques:
                     tech_idx = df_tech[df_tech['Technique']==row['Move']].index.item()
                     tech_name = df_tech.iloc[tech_idx]['Technique']
@@ -103,49 +93,32 @@ for _, row in df.iloc[:].iterrows():
                     #permanently replace row value with cluster name
                     move_alias = 'cluster'+tech_name# alias of move cell 
                     # g.node(row['Dilemma']+row['Move'], label=row['Move'])
-
                 else:
                     move_alias = row['Dilemma']+row['Move'] # alias of move cell
-            
-
-            # if row['Move'] == '':
-            #     move_alias = position_alias
-
+  
                 g.node(move_alias, label=row['Move'])
                 
                 gph.attr('node', shape=shape_move, color=color_move, style='filled', fontname=font)
                 gph.edge(position_alias, move_alias)
+
+            else:
+                gph.attr('node', shape=shape_counter, color=color_counter, style='filled', fontname=font)
+                gph.edge(position_alias, result_alias)
 
             if row['Result'] in states:
                 gph.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 gph.node(result_alias, label=row['Result'])
                 if not reaction_only:
                     gph.edge(move_alias, result_alias)
-                else:
-                    gph.edge(position_alias, result_alias)
                     
             else:
                 g.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 g.node(result_alias, label=row['Result'])
                 if not reaction_only:
                     g.edge(move_alias, result_alias)
-                else:
-                    g.edge(position_alias, result_alias)
-            # gph.edges([(position_alias, move_alias),
-            #          (move_alias, row['Dilemma']+row['Result'])])
 
-            # if reaction_only:
-            #     gph.edge(position_alias, result_alias)
-
+            # add dilemma name to subset border
             g.attr(label=row['Dilemma'], fontname=font)
-        # g.attr('node', shape='ellipse', color='coral', style='filled', fontname='helvetica')
-        # g.node(row['Position'], label=row['Position'])
-        # g.node(row['Result'], label=row['Result'])
-        
-        # g.attr('node', shape='box', color='cadetblue1', style='filled')
-        # g.node(row['Move'], label=row['Move'])
-        
-        # g.edge(row['Position'], row['Move'])
-        # g.edge(row['Move'], row['Result'])
-gph
+
+gph.view()
 # %%
