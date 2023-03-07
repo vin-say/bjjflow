@@ -18,6 +18,8 @@ states = pd.read_excel('bjj_flow_vps.xlsx',sheet_name='States')['States'].to_lis
 df = df[~(df['Position'].str.contains('--') & 
           ~df['Position'].isna())].reset_index(drop=True)
 
+states = [state for state in states if '--' not in str(state)] 
+
 font = 'helvetica'
 gph = Digraph('G', filename='bjj_flow_vps.gv', strict=True)
 
@@ -36,6 +38,8 @@ shape_state = 'doubleoctagon'
 shape_counter = 'ellipse'
 shape_move = 'box'
 shape_sub = 'diamond'
+
+
 
 for _, row in df.iloc[:].iterrows():
 
@@ -71,6 +75,14 @@ for _, row in df.iloc[:].iterrows():
             shape_result = shape_counter
             color_result = color_counter
 
+        # gi and nogi exclusive moves have different edges (dashed==nogi, dotted==gi)
+        if row['Exclusivity'] == 'Gi':
+            edge_style='dotted'
+        elif row['Exclusivity'] == 'Nogi':
+            edge_style='tapered'
+        else:
+            edge_style='solid'
+
         # NOTE: the subgraph name needs to begin with 'cluster' (all lowercase)
         #       so that Graphviz recognizes it as a special cluster subgraph
         with gph.subgraph(name='cluster'+row['Dilemma']) as g:
@@ -99,23 +111,23 @@ for _, row in df.iloc[:].iterrows():
                 g.node(move_alias, label=row['Move'])
                 
                 gph.attr('node', shape=shape_move, color=color_move, style='filled', fontname=font)
-                gph.edge(position_alias, move_alias)
+                gph.edge(position_alias, move_alias, style=edge_style)
 
             else:
                 gph.attr('node', shape=shape_counter, color=color_counter, style='filled', fontname=font)
-                gph.edge(position_alias, result_alias)
+                gph.edge(position_alias, result_alias, style=edge_style)
 
             if row['Result'] in states:
                 gph.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 gph.node(result_alias, label=row['Result'])
                 if not reaction_only:
-                    gph.edge(move_alias, result_alias)
+                    gph.edge(move_alias, result_alias, style=edge_style)
                     
             else:
                 g.attr('node', shape=shape_result, color=color_result, style='filled', fontname=font)
                 g.node(result_alias, label=row['Result'])
                 if not reaction_only:
-                    g.edge(move_alias, result_alias)
+                    g.edge(move_alias, result_alias, style=edge_style)
 
             # add dilemma name to subset border
             g.attr(label=row['Dilemma'], fontname=font)
